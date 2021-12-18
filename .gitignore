@@ -15,3 +15,5 @@ __pycache__/
 *.so
 .rendered
 Note.md
+final_ans.txt
+final_result/

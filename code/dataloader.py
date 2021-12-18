@@ -21,7 +21,7 @@ import scipy.sparse as sp
 import world
 from world import cprint
 from time import time
-
+from utils import onePrint
 class BasicDataset(Dataset):
     def __init__(self):
         print("init dataset")
@@ -71,6 +71,7 @@ class BasicDataset(Dataset):
 
 
 def add_virtual(data,limit):
+    onePrint("addVirtual")
     user=np.array(data[:,0])
     item=np.array(data[:,1])
     uniUser = np.unique(user)

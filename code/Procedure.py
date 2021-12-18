@@ -150,6 +150,8 @@ def Test(dataset, Recmodel, epoch, w=None, multicore=0):
         global bestNdcg
         if results['recall']>bestRecall or results['ndcg']>bestNdcg:
             bestNum=0
+            bestRecall=results['recall']
+            bestNdcg=results['ndcg']
         else :
             bestNum+=1
         

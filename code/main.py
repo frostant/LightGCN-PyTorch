@@ -16,7 +16,8 @@ print(">>SEED:", world.seed)
 # ==============================
 import register
 from register import dataset
-
+from utils import onePrint
+onePrint("Start")
 Recmodel = register.MODELS[world.model_name](world.config, dataset)
 Recmodel = Recmodel.to(world.device)
 bpr = utils.BPRLoss(Recmodel, world.config)
@@ -56,6 +57,7 @@ try:
             tmp,result=Procedure.Test(dataset, Recmodel, epoch, w, world.config['multicore'])
             during = time()-start
             print(f"{during:.2f}")
+            print(tmp)
             if tmp[2]>breakNum:
                 print("Beak because no update")
                 break
@@ -72,3 +74,6 @@ finally:
     if world.tensorboard:
         w.close()
 print(tmp)
+
+from utils import globalSet
+print("Global Function",globalSet)

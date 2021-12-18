@@ -10,6 +10,12 @@ import torch
 from torch import nn, optim
 import numpy as np
 from torch import log
+
+globalSet=set()
+def onePrint(funcName):
+    global globelSet 
+    globalSet.add(funcName)
+    
 from dataloader import BasicDataset
 from time import time
 from model import LightGCN
@@ -48,8 +54,10 @@ class BPRLoss:
         self.opt.step()
 
         return loss.cpu().item()
-# 计算loss
 
+
+
+# 计算loss
 def UniformSample_original(dataset, neg_ratio = 1):
     dataset : BasicDataset
     allPos = dataset.allPos

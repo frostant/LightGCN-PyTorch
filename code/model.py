@@ -14,6 +14,8 @@ from dataloader import BasicDataset
 from torch import nn
 import numpy as np
 import logging
+from utils import onePrint
+
 
 class BasicModel(nn.Module):    
     def __init__(self):
@@ -102,6 +104,7 @@ class LightGCN(BasicModel):
         self.embedding_item = torch.nn.Embedding(
             num_embeddings=self.num_items, embedding_dim=self.latent_dim)
         # self.W = nn.Linear(self.latent_dim,self.latent_dim, bias=True)
+        # torch.nn.LayerNorm
         
         # self.W = nn.Linear((self.num_items+self.num_users),(self.num_items+self.num_users), bias=True)
         # self.weight1=torch.nn.Linear((self.num_items+self.num_users),(self.num_items+self.num_users))
@@ -245,7 +248,69 @@ class LightGCN(BasicModel):
     def __dropout_x__v2(self,x,keep_prob):
         # (1/du_1+1/du_2)/2*prob
         pass
+    
+    def __dropadd_v1(self,x, m_user, m_item,keep_prob):
+        # LastFm Sparsity : 0.00620355984113386
+        # # global 加边
+        keep_prob=min(keep_prob,0.0062)
+        # size = x.size()
+        # index = x.indices().t()
+        # values = x.values()
+        # random_index = torch.rand(len(values)) + keep_prob
+        # random_index = random_index.int().bool()
+        # index = index[random_index]
+        # values = values[random_index]/keep_prob #!! 归一化
+        # g = torch.sparse.FloatTensor(index.t(), values, size)
+        # return g
+        x=x.to("cpu")
+        size = x.size()
+        index = x.indices().t()
+        values = x.values()
+        # indexT=index.t()
+        # diff = torch.sub(indexT[0],indexT[1])
+        # adj_idx = torch.where(diff!=0,True,False)
+        # self_idx = torch.bitwise_not(adj_idx)
+        # newValues=torch.ones(len(values)).float()
 
+        random_index = torch.rand(len(m_user+m_item)) + keep_prob
+        # random_index = random_index.int().bool().to(world.device) # to?!
+
+        addidx=[]
+        for i in range(m_user):
+            for j in range(m_item):
+                if(random_index[i]+random_index[j+m_user]>1.0):
+                    addidx.append((i,j))
+        npAdd=np.array(addidx)
+        # oneAdd = np.ones(len(addidx))
+
+        newIndex=np.concatenate((index,npAdd),axis=0)
+        # np.concatenate()
+        newValues=np.ones(len(values)+len(addidx))
+        newG=torch.sparse.IntTensor(newIndex,newValues,size)
+        dense=newG.to_dense()
+        D=torch.sum(dense,dim=1).float()
+        D[D==0.]=1.
+        D_sqrt = torch.sqrt(D).unsqueeze(dim=0)
+        dense = dense/D_sqrt
+        dense = dense/D_sqrt.t()
+        index = dense.nonzero()
+        data  = dense[dense >= 1e-9]
+        assert len(index) == len(data)
+        g = torch.sparse.FloatTensor(index.t(), data, size)
+        g = g.coalesce().to(world.device)
+        return g
+
+    def __dropadd_v2(self,x,keep_prob):
+        # 孤立点 加边
+        size = x.size()
+        index = x.indices().t()
+        values = x.values()
+        random_index = torch.rand(len(values)) + keep_prob
+        random_index = random_index.int().bool()
+        index = index[random_index]
+        values = values[random_index]/keep_prob #!! 归一化
+        g = torch.sparse.FloatTensor(index.t(), values, size)
+        return g
     
     # @timer
     def create_adj_mat(self, is_subgraph=False, aug_type=0):
@@ -323,6 +388,7 @@ class LightGCN(BasicModel):
 
         # print("allemb",all_emb.shape)
         if self.config['dropout']:
+            onePrint("dropout")
             if self.training:
                 g_droped = self.__dropout(self.keep_prob)
             else:
