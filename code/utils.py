@@ -48,7 +48,7 @@ class BPRLoss:
         self.opt.step()
 
         return loss.cpu().item()
-
+# 计算loss
 
 def UniformSample_original(dataset, neg_ratio = 1):
     dataset : BasicDataset
@@ -82,17 +82,23 @@ def UniformSample_original_python(dataset):
             continue
         sample_time2 += time() - start
         posindex = np.random.randint(0, len(posForUser))
+        # 既然 users的数量和正样本数量相同,就不需要使用随机了吧?
         positem = posForUser[posindex]
+        # positem 是一个ID， 表示正样本
         while True:
             negitem = np.random.randint(0, dataset.m_items)
             if negitem in posForUser:
                 continue
             else:
                 break
+        # TODO: 这个可以改成set相减进行random, 但正样本很少,速度更慢??
+        # negitem 是一个ID, 表示负样本
         S.append([user, positem, negitem])
+        # 正负样本以1:1进行训练
         end = time()
         sample_time1 += end - start
     total = time() - total_start
+    # time1 是负样本采集时间, time2是正样本采集时间 total是随机采样时间
     return np.array(S)
 
 # ===================end samplers==========================
@@ -126,12 +132,13 @@ def minibatch(*tensors, **kwargs):
 
 
 def shuffle(*arrays, **kwargs):
-
+    # shuffle若干个数组,但是对应关系不变
     require_indices = kwargs.get('indices', False)
 
     if len(set(len(x) for x in arrays)) != 1:
         raise ValueError('All inputs to shuffle must have '
                          'the same length.')
+    # 每个数组维度相同
 
     shuffle_indices = np.arange(len(arrays[0]))
     np.random.shuffle(shuffle_indices)
@@ -140,6 +147,7 @@ def shuffle(*arrays, **kwargs):
         result = arrays[0][shuffle_indices]
     else:
         result = tuple(x[shuffle_indices] for x in arrays)
+    # ???
 
     if require_indices:
         return result, shuffle_indices
@@ -177,7 +185,7 @@ class timer:
                 hint = hint + f"{key}:{value:.2f}|"
         return hint
 
-    @staticmethod
+    @staticmethod # 静态方法, 可以没有实例使用, 可能用法是全局仅有一个
     def zero(select_keys=None):
         if select_keys is None:
             for key, value in timer.NAMED_TAPE.items():
@@ -223,7 +231,8 @@ def RecallPrecision_ATk(test_data, r, k):
     recall = np.sum(right_pred/recall_n)
     precis = np.sum(right_pred)/precis_n
     return {'recall': recall, 'precision': precis}
-
+    # 是不是预测int正确个数如果前k个有几个就是几,反之0
+    # 则 预测率就是 ans/k, 召回率就是ans/出现的正样本个数
 
 def MRRatK_r(r, k):
     """
@@ -234,6 +243,7 @@ def MRRatK_r(r, k):
     pred_data = pred_data/scores
     pred_data = pred_data.sum(1)
     return np.sum(pred_data)
+    # 平均倒数排名, 要乘log的惩罚因子, 越小越好
 
 def NDCGatK_r(test_data,r,k):
     """
@@ -255,6 +265,8 @@ def NDCGatK_r(test_data,r,k):
     ndcg = dcg/idcg
     ndcg[np.isnan(ndcg)] = 0.
     return np.sum(ndcg)
+    # ndcg 归一化折损累计增益
+    # 累计增益 sigma 折损 除log2 归一化 除最大值
 
 def AUC(all_item_scores, dataset, test_data):
     """
@@ -266,6 +278,7 @@ def AUC(all_item_scores, dataset, test_data):
     r = r_all[all_item_scores >= 0]
     test_item_scores = all_item_scores[all_item_scores >= 0]
     return roc_auc_score(r, test_item_scores)
+    # AUC 
 
 def getLabel(test_data, pred_data):
     r = []
@@ -273,6 +286,8 @@ def getLabel(test_data, pred_data):
         groundTrue = test_data[i]
         predictTopK = pred_data[i]
         pred = list(map(lambda x: x in groundTrue, predictTopK))
+        # map(lambda x: x in groundTrue, predictTopK)
+        # 指 对于每个predict元素使用lambda函数,判断x是不是在ground里面, 返回T or F ,在变成0. , 1.
         pred = np.array(pred).astype("float")
         r.append(pred)
     return np.array(r).astype('float')

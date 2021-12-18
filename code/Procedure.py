@@ -26,7 +26,9 @@ CORES = multiprocessing.cpu_count() // 2
 def BPR_train_original(dataset, recommend_model, loss_class, epoch, neg_k=1, w=None):
     Recmodel = recommend_model
     Recmodel.train()
+    # 启用batch normalization 和 dropout
     bpr: utils.BPRLoss = loss_class
+    # bpr = loss_class 冒号表示冒号左侧的变量类型为冒号右侧 a:int = 12
     
     with timer(name="Sample"):
         S = utils.UniformSample_original(dataset)
@@ -39,6 +41,7 @@ def BPR_train_original(dataset, recommend_model, loss_class, epoch, neg_k=1, w=N
     negItems = negItems.to(world.device)
     users, posItems, negItems = utils.shuffle(users, posItems, negItems)
     total_batch = len(users) // world.config['bpr_batch_size'] + 1
+    # //整除  
     aver_loss = 0.
     for (batch_i,
          (batch_users,
@@ -70,7 +73,10 @@ def test_one_batch(X):
     return {'recall':np.array(recall), 
             'precision':np.array(pre), 
             'ndcg':np.array(ndcg)}
-        
+
+bestRecall=0
+bestNdcg=0
+bestNum=0
             
 def Test(dataset, Recmodel, epoch, w=None, multicore=0):
     u_batch_size = world.config['test_u_batch_size']
@@ -139,6 +145,14 @@ def Test(dataset, Recmodel, epoch, w=None, multicore=0):
         results['recall'] /= float(len(users))
         results['precision'] /= float(len(users))
         results['ndcg'] /= float(len(users))
+        global bestNum
+        global bestRecall
+        global bestNdcg
+        if results['recall']>bestRecall or results['ndcg']>bestNdcg:
+            bestNum=0
+        else :
+            bestNum+=1
+        
         # results['auc'] = np.mean(auc_record)
         if world.tensorboard:
             w.add_scalars(f'Test/Recall@{world.topks}',
@@ -150,4 +164,6 @@ def Test(dataset, Recmodel, epoch, w=None, multicore=0):
         if multicore == 1:
             pool.close()
         print(results)
-        return results
+        print("#####W######")
+        # print(Recmodel.W._parameters)
+        return [bestRecall,bestNdcg,bestNum], results

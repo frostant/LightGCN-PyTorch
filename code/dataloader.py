@@ -10,6 +10,8 @@ Every dataset's index has to start at 0
 import os
 from os.path import join
 import sys
+
+from numpy.core.defchararray import add
 import torch
 import numpy as np
 import pandas as pd
@@ -67,6 +69,25 @@ class BasicDataset(Dataset):
         """
         raise NotImplementedError
 
+
+def add_virtual(data,limit):
+    user=np.array(data[:,0])
+    item=np.array(data[:,1])
+    uniUser = np.unique(user)
+    n=len(uniUser)
+    add_node=[]
+    for i in uniUser:
+        sum=np.sum(user==i)
+        if sum<limit:
+            add_node.append((i,n))
+            n+=1
+    add_node=np.array(add_node)
+    print("add_node=",len(add_node))
+    # print(data.shape)
+    # print(add_node.shape)
+    return np.concatenate((data,add_node),axis=0)
+
+
 class LastFM(BasicDataset):
     """
     Dataset type for pytorch \n
@@ -80,25 +101,32 @@ class LastFM(BasicDataset):
         self.mode    = self.mode_dict['train']
         # self.n_users = 1892
         # self.m_items = 4489
-        trainData = pd.read_table(join(path, 'data1.txt'), header=None)
+        _trainData = pd.read_table(join(path, 'data1.txt'), header=None).to_numpy()
         # print(trainData.head())
-        testData  = pd.read_table(join(path, 'test1.txt'), header=None)
+        testData  = pd.read_table(join(path, 'test1.txt'), header=None).to_numpy()
         # print(testData.head())
         trustNet  = pd.read_table(join(path, 'trustnetwork.txt'), header=None).to_numpy()
         # print(trustNet[:5])
         trustNet -= 1
-        trainData-= 1
+        _trainData-= 1
         testData -= 1
+        # print(_trainData.shape)
+        trainData = _trainData[:,0:2]
+        self.add_virtual_node = True 
+        if self.add_virtual_node:
+            # print(trainData.shape)
+            trainData=add_virtual(trainData,5)
+
         self.trustNet  = trustNet
         self.trainData = trainData
         self.testData  = testData
-        self.trainUser = np.array(trainData[:][0])
+        self.trainUser = np.array(trainData[:,0])
         self.trainUniqueUsers = np.unique(self.trainUser)
-        self.trainItem = np.array(trainData[:][1])
+        self.trainItem = np.array(trainData[:,1])
         # self.trainDataSize = len(self.trainUser)
-        self.testUser  = np.array(testData[:][0])
+        self.testUser  = np.array(testData[:,0])
         self.testUniqueUsers = np.unique(self.testUser)
-        self.testItem  = np.array(testData[:][1])
+        self.testItem  = np.array(testData[:,1])
         self.Graph = None
         print(f"LastFm Sparsity : {(len(self.trainUser) + len(self.testUser))/self.n_users/self.m_items}")
         
@@ -109,6 +137,7 @@ class LastFM(BasicDataset):
         
         # pre-calculate
         self._allPos = self.getUserPosItems(list(range(self.n_users)))
+        # matrix:有和这个user交互的item
         self.allNeg = []
         allItems    = set(range(self.m_items))
         for i in range(self.n_users):
@@ -116,6 +145,7 @@ class LastFM(BasicDataset):
             neg = allItems - pos
             self.allNeg.append(np.array(list(neg)))
         self.__testDict = self.__build_test()
+    # users = np.random.randint(0, dataset.n_users, user_num)
 
     @property
     def n_users(self):
@@ -144,10 +174,16 @@ class LastFM(BasicDataset):
             
             first_sub = torch.stack([user_dim, item_dim + self.n_users])
             second_sub = torch.stack([item_dim+self.n_users, user_dim])
+            # 1 user item 2 item user
             index = torch.cat([first_sub, second_sub], dim=1)
             data = torch.ones(index.size(-1)).int()
             self.Graph = torch.sparse.IntTensor(index, data, torch.Size([self.n_users+self.m_items, self.n_users+self.m_items]))
             dense = self.Graph.to_dense()
+            # Graph:
+            # # U I 
+            # U 0 1
+            # I 2 0 
+            # 1 is first sub 2 is second sub
             D = torch.sum(dense, dim=1).float()
             D[D==0.] = 1.
             D_sqrt = torch.sqrt(D).unsqueeze(dim=0)
@@ -155,6 +191,7 @@ class LastFM(BasicDataset):
             dense = dense/D_sqrt.t()
             index = dense.nonzero()
             data  = dense[dense >= 1e-9]
+            # D is 度矩阵
             assert len(index) == len(data)
             self.Graph = torch.sparse.FloatTensor(index.t(), data, torch.Size([self.n_users+self.m_items, self.n_users+self.m_items]))
             self.Graph = self.Graph.coalesce().to(world.device)
@@ -190,6 +227,9 @@ class LastFM(BasicDataset):
         posItems = []
         for user in users:
             posItems.append(self.UserItemNet[user].nonzero()[1])
+        # 使用scipy会得到(array([0, 0, 0], dtype=int32), array([0, 1, 2], dtype=int32))
+        # 所以取第1维
+        # return 二维， 表示第i个user和他交互的item的编号
         return posItems
     
     def getUserNegItems(self, users):
@@ -250,6 +290,8 @@ class Loader(BasicDataset):
                     self.m_item = max(self.m_item, max(items))
                     self.n_user = max(self.n_user, uid)
                     self.traindataSize += len(items)
+        # 输入数据可能是一行第一个是user,后面全是item, 或每行一个user-item..  
+        # trainUser是所有user,trainItem是所有item 相互对应
         self.trainUniqueUsers = np.array(trainUniqueUsers)
         self.trainUser = np.array(trainUser)
         self.trainItem = np.array(trainItem)

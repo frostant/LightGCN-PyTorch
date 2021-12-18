@@ -13,10 +13,10 @@ from enum import Enum
 from parse import parse_args
 import multiprocessing
 
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+# os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 args = parse_args()
 
-ROOT_PATH = "/Users/gus/Desktop/light-gcn"
+ROOT_PATH = "./light-gcn"
 CODE_PATH = join(ROOT_PATH, 'code')
 DATA_PATH = join(ROOT_PATH, 'data')
 BOARD_PATH = join(CODE_PATH, 'runs')
@@ -48,7 +48,7 @@ config['A_split'] = False
 config['bigdata'] = False
 
 GPU = torch.cuda.is_available()
-device = torch.device('cuda' if GPU else "cpu")
+device = torch.device('cuda:3' if GPU else "cpu")
 CORES = multiprocessing.cpu_count() // 2
 seed = args.seed
 

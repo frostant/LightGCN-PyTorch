@@ -7,12 +7,13 @@ Xiangnan He et al. LightGCN: Simplifying and Powering Graph Convolution Network 
 
 Define models here
 """
+import scipy.sparse as sp
 import world
 import torch
 from dataloader import BasicDataset
 from torch import nn
 import numpy as np
-
+import logging
 
 class BasicModel(nn.Module):    
     def __init__(self):
@@ -100,6 +101,35 @@ class LightGCN(BasicModel):
             num_embeddings=self.num_users, embedding_dim=self.latent_dim)
         self.embedding_item = torch.nn.Embedding(
             num_embeddings=self.num_items, embedding_dim=self.latent_dim)
+        # self.W = nn.Linear(self.latent_dim,self.latent_dim, bias=True)
+        
+        # self.W = nn.Linear((self.num_items+self.num_users),(self.num_items+self.num_users), bias=True)
+        # self.weight1=torch.nn.Linear((self.num_items+self.num_users),(self.num_items+self.num_users))
+    
+#     def forward(self, input, adj):
+#         support = self.W(input)
+#         output = torch.spmm(adj, support)
+
+# class GCN(nn.Module):
+#     """
+#     A Two-layer GCN.
+#     """
+#     def __init__(self, nfeat, nhid, nclass, dropout):
+#         super(GCN, self).__init__()
+
+#         self.gc1 = GraphConvolution(nfeat, nhid)
+#         self.gc2 = GraphConvolution(nhid, nclass)
+#         self.dropout = dropout
+
+#     def forward(self, x, adj, use_relu=True):
+#         x = self.gc1(x, adj)
+#         if use_relu:
+#             x = F.relu(x)
+#         x = F.dropout(x, self.dropout, training=self.training)
+#         x = self.gc2(x, adj)
+#         return x
+
+
         if self.config['pretrain'] == 0:
 #             nn.init.xavier_uniform_(self.embedding_user.weight, gain=1)
 #             nn.init.xavier_uniform_(self.embedding_item.weight, gain=1)
@@ -118,18 +148,153 @@ class LightGCN(BasicModel):
 
         # print("save_txt")
     def __dropout_x(self, x, keep_prob):
+        # keep prob 保留神经元的概率, 类似1-dropout的rate
+        # graph是sparse,他取出所有value,dropout部分节点,剩余节点扩大prob,以实现归一化
         size = x.size()
         index = x.indices().t()
         values = x.values()
         random_index = torch.rand(len(values)) + keep_prob
         random_index = random_index.int().bool()
         index = index[random_index]
-        values = values[random_index]/keep_prob
+        values = values[random_index]/keep_prob #!! 归一化
         g = torch.sparse.FloatTensor(index.t(), values, size)
         return g
     
+    def __dropout_x__v1(self, x, m_user, m_item,keep_prob):
+        # 方法1：点dropout
+        size = x.size()
+        index = x.indices().t()
+        values = x.values()
+        # print(index.shape)
+        # degree = torch.sparse.sum(x,dim=1)
+        # degree = degree.to_dense()
+        # zero = torch.zeros(degree.shape).to(world.device)
+        # degree = torch.where(degree>1e-9,1/degree,zero)
+        
+        random_index = torch.rand(m_user+m_item) + keep_prob
+        random_index = random_index.int().bool().to(world.device)
+        # uu = map(lambda x,y:min(x,y), index[:,0])
+        # logging.warning(index.shape)
+        # min_idx = torch.min(index, dim=1)
+        # # logging.warning(min_idx.shape)
+        # min_idx = random_index[min_idx]
+        # # logging.warning(min_idx.shape)
+        # indexT=index.t()
+        # diff = torch.sub(indexT[0],indexT[1])
+        # new_index = torch.where(diff!=0,min_idx,0).bool()
+
+        # indexT=index.t()
+        # diff = torch.sub(indexT[0],indexT[1])
+        # adj_idx = torch.where(diff!=0,True,False)
+        # self_idx = torch.bitwise_not(adj_idx)
+        # index_a = index[adj_idx]
+        # logging.warning(index_a.shape)
+        # min_idx = torch.min(index_a, dim=1).values
+        # logging.warning(min_idx.shape)
+        # min_idx = random_index[min_idx]
+        
+        # # new_index = torch.bitwise_or(self_idx,min_idx)
+        # indexa = index[min_idx]
+        # indexs = index[self_idx]
+        # index = torch.cat((indexa,indexs),0) 
+        # # index = index[new_index] # !!!! error The shape of the mask [2474518] at index 0 does not match the shape of the indexed tensor [2544234, 2] at index 0
+        
+        # valuesa = values[min_idx]
+        # valuess = values[self_idx]
+        # values = torch.cat((valuesa,valuess))
+        # values = values/keep_prob
+
+        indexT=index.t()
+        diff = torch.sub(indexT[0],indexT[1])
+        adj_idx = torch.where(diff!=0,True,False)
+        self_idx = torch.bitwise_not(adj_idx)
+        # index_a = index[adj_idx]
+        # logging.warning(index_a.shape)
+
+        min_idx = torch.min(index, dim=1).values #G
+        # print(min_idx.device)
+        
+        # logging.warning(min_idx.shape)
+        min_idx = random_index[min_idx] # G
+        # adj_idx = adj_idx.to("cpu")
+        # print(adj_idx.device)
+        min_idx = torch.bitwise_and(adj_idx, min_idx) #G 
+        # print(min_idx.device)
+
+        # new_index = torch.bitwise_or(self_idx,min_idx)
+        indexa = index[min_idx]
+        indexs = index[self_idx]
+        index = torch.cat((indexa,indexs),0) 
+        # index = index[new_index] # !!!! error The shape of the mask [2474518] at index 0 does not match the shape of the indexed tensor [2544234, 2] at index 0
+        
+        valuesa = values[min_idx]
+        valuess = values[self_idx]
+        values = torch.cat((valuesa,valuess))
+        values = values/keep_prob
+
+        # new_index = torch.where(diff!=0,min_idx,0).bool()
+
+        # new_index = random_index[index[i][1]]
+
+        # index = index[new_index] # !!!! error The shape of the mask [2474518] at index 0 does not match the shape of the indexed tensor [2544234, 2] at index 0
+        # values = values[new_index]/keep_prob
+        g = torch.sparse.FloatTensor(index.t(), values, size)
+        return g
+        
+
+    def __dropout_x__v2(self,x,keep_prob):
+        # (1/du_1+1/du_2)/2*prob
+        pass
+
+    
+    # @timer
+    def create_adj_mat(self, is_subgraph=False, aug_type=0):
+        n_nodes = self.n_users + self.n_items
+        if is_subgraph and aug_type in [0, 1, 2] and self.ssl_ratio > 0:
+            # data augmentation type --- 0: Node Dropout; 1: Edge Dropout; 2: Random Walk
+            if aug_type == 0:
+                drop_user_idx = randint_choice(self.n_users, size=self.n_users * self.ssl_ratio, replace=False)
+                drop_item_idx = randint_choice(self.n_items, size=self.n_items * self.ssl_ratio, replace=False)
+                indicator_user = np.ones(self.n_users, dtype=np.float32)
+                indicator_item = np.ones(self.n_items, dtype=np.float32)
+                indicator_user[drop_user_idx] = 0.
+                indicator_item[drop_item_idx] = 0.
+                diag_indicator_user = sp.diags(indicator_user)
+                diag_indicator_item = sp.diags(indicator_item)
+                R = sp.csr_matrix(
+                    (np.ones_like(self.training_user, dtype=np.float32), (self.training_user, self.training_item)), 
+                    shape=(self.n_users, self.n_items))
+                R_prime = diag_indicator_user.dot(R).dot(diag_indicator_item)
+                (user_np_keep, item_np_keep) = R_prime.nonzero()
+                ratings_keep = R_prime.data
+                tmp_adj = sp.csr_matrix((ratings_keep, (user_np_keep, item_np_keep+self.n_users)), shape=(n_nodes, n_nodes))
+            if aug_type in [1, 2]:
+                keep_idx = randint_choice(len(self.training_user), size=int(len(self.training_user) * (1 - self.ssl_ratio)), replace=False)
+                user_np = np.array(self.training_user)[keep_idx]
+                item_np = np.array(self.training_item)[keep_idx]
+                ratings = np.ones_like(user_np, dtype=np.float32)
+                tmp_adj = sp.csr_matrix((ratings, (user_np, item_np+self.n_users)), shape=(n_nodes, n_nodes))
+        else:
+            user_np = np.array(self.training_user)
+            item_np = np.array(self.training_item)
+            ratings = np.ones_like(user_np, dtype=np.float32)
+            tmp_adj = sp.csr_matrix((ratings, (user_np, item_np+self.n_users)), shape=(n_nodes, n_nodes))
+        adj_mat = tmp_adj + tmp_adj.T
+
+        # pre adjcency matrix
+        rowsum = np.array(adj_mat.sum(1))
+        d_inv = np.power(rowsum, -0.5).flatten()
+        d_inv[np.isinf(d_inv)] = 0.
+        d_mat_inv = sp.diags(d_inv)
+        norm_adj_tmp = d_mat_inv.dot(adj_mat)
+        adj_matrix = norm_adj_tmp.dot(d_mat_inv)
+        # print('use the pre adjcency matrix')
+
+        return adj_matrix
+    
+
     def __dropout(self, keep_prob):
-        if self.A_split:
+        if self.A_split: # ?把邻接矩阵裁成n行
             graph = []
             for g in self.Graph:
                 graph.append(self.__dropout_x(g, keep_prob))
@@ -137,7 +302,16 @@ class LightGCN(BasicModel):
             graph = self.__dropout_x(self.Graph, keep_prob)
         return graph
     
+    def _dropout__v1(self, keep_prob):
+        if self.A_split:
+            pass # TODO 
+        else :
+            graph = self.__dropout_x__v1(self.Graph, self.num_users, self.num_items, keep_prob)
+        return graph
+    
     def computer(self):
+        # 手写正向传播
+        # 
         """
         propagate methods for lightGCN
         """       
@@ -146,15 +320,16 @@ class LightGCN(BasicModel):
         all_emb = torch.cat([users_emb, items_emb])
         #   torch.split(all_emb , [self.num_users, self.num_items])
         embs = [all_emb]
+
+        # print("allemb",all_emb.shape)
         if self.config['dropout']:
             if self.training:
-                print("droping")
                 g_droped = self.__dropout(self.keep_prob)
             else:
                 g_droped = self.Graph        
         else:
             g_droped = self.Graph    
-        
+        # 得到dropout后的 图
         for layer in range(self.n_layers):
             if self.A_split:
                 temp_emb = []
@@ -163,15 +338,20 @@ class LightGCN(BasicModel):
                 side_emb = torch.cat(temp_emb, dim=0)
                 all_emb = side_emb
             else:
+                # hidden=all_emb.clone() # delete
+                # out=self.W(hidden)
+                # all_emb = torch.sparse.mm(g_droped, out)
                 all_emb = torch.sparse.mm(g_droped, all_emb)
             embs.append(all_emb)
         embs = torch.stack(embs, dim=1)
         #print(embs.size())
         light_out = torch.mean(embs, dim=1)
+        # 把每层的embedding取平均作为其embedding
         users, items = torch.split(light_out, [self.num_users, self.num_items])
         return users, items
     
     def getUsersRating(self, users):
+        # 得到该user(是个ID)和所有item的得分
         all_users, all_items = self.computer()
         users_emb = all_users[users.long()]
         items_emb = all_items
@@ -186,6 +366,7 @@ class LightGCN(BasicModel):
         users_emb_ego = self.embedding_user(users)
         pos_emb_ego = self.embedding_item(pos_items)
         neg_emb_ego = self.embedding_item(neg_items)
+        # 把本次的embedding和原来的embedding 都返回
         return users_emb, pos_emb, neg_emb, users_emb_ego, pos_emb_ego, neg_emb_ego
     
     def bpr_loss(self, users, pos, neg):
@@ -194,6 +375,7 @@ class LightGCN(BasicModel):
         reg_loss = (1/2)*(userEmb0.norm(2).pow(2) + 
                          posEmb0.norm(2).pow(2)  +
                          negEmb0.norm(2).pow(2))/float(len(users))
+        # 正则化是拿原来的embedding
         pos_scores = torch.mul(users_emb, pos_emb)
         pos_scores = torch.sum(pos_scores, dim=1)
         neg_scores = torch.mul(users_emb, neg_emb)
