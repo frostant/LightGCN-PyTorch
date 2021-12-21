@@ -28,8 +28,8 @@ seed=2020
 dataset=lastfm
 topks=[20]
 recdim=64
-dropout=0
-keepprob=1
+dropout=1
+keepprob=0.5
 epochs=100
 output=${dataset}_${layer}_${lr}_${keepprob}_${decay}_${time2}_$1.txt
 echo $output
