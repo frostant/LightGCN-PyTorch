@@ -17,6 +17,8 @@ print(">>SEED:", world.seed)
 import register
 from register import dataset
 from utils import onePrint
+torch.set_printoptions(profile="full")
+torch.set_printoptions(profile="default")
 onePrint("Start")
 Recmodel = register.MODELS[world.model_name](world.config, dataset)
 Recmodel = Recmodel.to(world.device)
@@ -77,3 +79,9 @@ print(tmp)
 
 from utils import globalSet
 print("Global Function",globalSet)
+printParam=False
+if printParam:
+    with open("param.txt","w") as fout:
+        torch.set_printoptions(profile="full")
+        for parameters in Recmodel.parameters():#打印出参数矩阵及值
+            print(parameters,file=fout)

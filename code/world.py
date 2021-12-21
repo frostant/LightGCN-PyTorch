@@ -48,7 +48,10 @@ config['A_split'] = False
 config['bigdata'] = False
 
 GPU = torch.cuda.is_available()
-device = torch.device('cuda:3' if GPU else "cpu")
+device = torch.device('cuda:2' if GPU else "cpu")
+print("#######################")
+print(device)
+print("#######################")
 CORES = multiprocessing.cpu_count() // 2
 seed = args.seed
 

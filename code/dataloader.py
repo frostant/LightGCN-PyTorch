@@ -7,6 +7,7 @@ Xiangnan He et al. LightGCN: Simplifying and Powering Graph Convolution Network 
 Design Dataset here
 Every dataset's index has to start at 0
 """
+from io import SEEK_CUR
 import os
 from os.path import join
 import sys
@@ -319,7 +320,7 @@ class Loader(BasicDataset):
         print(f"{self.trainDataSize} interactions for training")
         print(f"{self.testDataSize} interactions for testing")
         print(f"{world.dataset} Sparsity : {(self.trainDataSize + self.testDataSize) / self.n_users / self.m_items}")
-
+        self.trainSparsity=self.trainDataSize/self.n_users/self.m_items
         # (users,items), bipartite graph
         self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
                                       shape=(self.n_user, self.m_item))
