@@ -113,7 +113,7 @@ class LastFM(BasicDataset):
         testData -= 1
         # print(_trainData.shape)
         trainData = _trainData[:,0:2]
-        self.add_virtual_node = True 
+        self.add_virtual_node = False 
         if self.add_virtual_node:
             # print(trainData.shape)
             trainData=add_virtual(trainData,5)

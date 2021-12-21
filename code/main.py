@@ -54,13 +54,13 @@ try:
         if epoch %10 == 0:
             start = time()
             cprint("[TEST]")
-            tmp,result=Procedure.Test(dataset, Recmodel, epoch, w, world.config['multicore'])
-            during = time()-start
-            print(f"{during:.2f}")
-            print(tmp)
-            if tmp[2]>breakNum:
-                print("Beak because no update")
-                break
+            # tmp,result=Procedure.Test(dataset, Recmodel, epoch, w, world.config['multicore'])
+            # during = time()-start
+            # print(f"{during:.2f}")
+            # print(tmp)
+            # if tmp[2]>breakNum:
+            #     print("Beak because no update")
+            #     break
 
         start = time()
         output_information = Procedure.BPR_train_original(dataset, Recmodel, bpr, epoch, neg_k=Neg_k,w=w)

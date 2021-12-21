@@ -250,6 +250,7 @@ class LightGCN(BasicModel):
         pass
     
     def __dropadd_v1(self,x, m_user, m_item,keep_prob):
+        onePrint("dropaddV1")
         # LastFm Sparsity : 0.00620355984113386
         # # global 加边
         keep_prob=min(keep_prob,0.0062)
@@ -272,7 +273,7 @@ class LightGCN(BasicModel):
         # self_idx = torch.bitwise_not(adj_idx)
         # newValues=torch.ones(len(values)).float()
 
-        random_index = torch.rand(len(m_user+m_item)) + keep_prob
+        random_index = torch.rand(m_user+m_item) + keep_prob / 2
         # random_index = random_index.int().bool().to(world.device) # to?!
 
         addidx=[]
@@ -285,8 +286,11 @@ class LightGCN(BasicModel):
 
         newIndex=np.concatenate((index,npAdd),axis=0)
         # np.concatenate()
-        newValues=np.ones(len(values)+len(addidx))
-        newG=torch.sparse.IntTensor(newIndex,newValues,size)
+        newIndex = torch.LongTensor(newIndex)
+        print(newIndex.shape)
+        newValues=torch.ones(len(values)+len(addidx)).int()
+        print(newValues.shape)
+        newG=torch.sparse.IntTensor(newIndex.t(),newValues,size)
         dense=newG.to_dense()
         D=torch.sum(dense,dim=1).float()
         D[D==0.]=1.
@@ -300,7 +304,60 @@ class LightGCN(BasicModel):
         g = g.coalesce().to(world.device)
         return g
 
-    def __dropadd_v2(self,x,keep_prob):
+    def __dropadd_v2(self,x, m_user, m_item,keep_prob):
+        onePrint("dropaddV2")
+        # LastFm Sparsity : 0.00620355984113386
+        # # global 加边
+        keep_prob=min(keep_prob,0.0062)
+        onePrint(str(keep_prob))
+        x=x.to("cpu")
+        size = x.size()
+        index = x.indices().t()
+        values = x.values()
+        
+        
+        random_index = torch.rand(m_user+m_item) + keep_prob / 2
+        randUser = (torch.rand(int(keep_prob*m_user*m_item)) * m_user).long()
+        randItem = (torch.rand(int(keep_prob*m_user*m_item)) * m_item).long()
+        newIndex = torch.stack([randUser,randItem], dim=0)
+        newIndex = torch.LongTensor(newIndex)
+        oneLen=len(randItem)+len(values)
+        # print(newIndex.shape)
+        # print(index.t().shape)
+        newIndex = torch.cat((index.t(),newIndex), dim=1)
+        
+        # random_index = random_index.int().bool().to(world.device) # to?!
+
+        # addidx=[]
+        # for i in range(m_user):
+        #     for j in range(m_item):
+        #         if(random_index[i]+random_index[j+m_user]>1.0):
+        #             addidx.append((i,j))
+        # npAdd=np.array(addidx)
+        # # oneAdd = np.ones(len(addidx))
+
+        # newIndex=np.concatenate((index,npAdd),axis=0)
+        # # np.concatenate()
+        # newIndex = torch.LongTensor(newIndex)
+        # print(newIndex.shape)
+        newValues=torch.ones(oneLen).int()
+        # print(newValues.shape)
+        newG=torch.sparse.IntTensor(newIndex,newValues,size)
+        newG = newG.coalesce()
+        dense=newG.to_dense()
+        D=torch.sum(dense,dim=1).float()
+        D[D==0.]=1.
+        D_sqrt = torch.sqrt(D).unsqueeze(dim=0)
+        dense = dense/D_sqrt
+        dense = dense/D_sqrt.t()
+        index = dense.nonzero()
+        data  = dense[dense >= 1e-9]
+        assert len(index) == len(data)
+        g = torch.sparse.FloatTensor(index.t(), data, size)
+        g = g.coalesce().to(world.device)
+        return g
+
+    def __dropadd_v000(self,x,keep_prob):
         # 孤立点 加边
         size = x.size()
         index = x.indices().t()
@@ -390,7 +447,7 @@ class LightGCN(BasicModel):
         if self.config['dropout']:
             onePrint("dropout")
             if self.training:
-                g_droped = self.__dropout(self.keep_prob)
+                g_droped = self.__dropadd_v2(self.Graph, self.num_users, self.num_items, self.keep_prob)
             else:
                 g_droped = self.Graph        
         else:
