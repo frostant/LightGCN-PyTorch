@@ -17,8 +17,8 @@ print(">>SEED:", world.seed)
 import register
 from register import dataset
 from utils import onePrint
-torch.set_printoptions(profile="full")
-torch.set_printoptions(profile="default")
+# torch.set_printoptions(profile="full")
+# torch.set_printoptions(profile="default")
 onePrint("Start")
 Recmodel = register.MODELS[world.model_name](world.config, dataset)
 Recmodel = Recmodel.to(world.device)

@@ -13,6 +13,7 @@ from os.path import join
 import sys
 
 from numpy.core.defchararray import add
+from numpy.core.fromnumeric import mean
 import torch
 import numpy as np
 import pandas as pd
@@ -132,6 +133,11 @@ class LastFM(BasicDataset):
         self.Graph = None
         print(f"LastFm Sparsity : {(len(self.trainUser) + len(self.testUser))/self.n_users/self.m_items}")
         
+
+    #             self.__init_weight()
+
+    # def __init_weight(self):
+    
         # (users,users)
         self.socialNet    = csr_matrix((np.ones(len(trustNet)), (trustNet[:,0], trustNet[:,1]) ), shape=(self.n_users,self.n_users))
         # (users,items), bipartite graph
@@ -197,8 +203,31 @@ class LastFM(BasicDataset):
             assert len(index) == len(data)
             self.Graph = torch.sparse.FloatTensor(index.t(), data, torch.Size([self.n_users+self.m_items, self.n_users+self.m_items]))
             self.Graph = self.Graph.coalesce().to(world.device)
-        return self.Graph
 
+            self.lowUser,self.lowItem = self.getLower(D)
+        return self.Graph
+    
+    def getLower(self,degree):
+        # meanDegree=(self.trainUser/self.n_users,self.trainUser/self.m_items)
+        # meanDegree
+        meanUserD = torch.ones(self.n_users)*int(len(self.trainUser)/self.n_users)
+        meanItemD = torch.ones(self.m_items)*int(len(self.trainUser)/self.m_items)
+        meanDegree = torch.cat([meanUserD,meanItemD]).long()
+        meanFlag = degree<=meanDegree
+        # print(meanFlag[:15])
+        # print(meanFlag[-15:])
+        lowUser=[]
+        for i in range(self.n_users):
+            if meanFlag[i]:
+                lowUser.append(i)
+        lowItem=[]
+        for i in range(self.m_items):
+            if meanFlag[i]:
+                lowItem.append(i)
+        lowUser=torch.LongTensor(lowUser)
+        lowItem=torch.LongTensor(lowItem)
+        return lowUser,lowItem
+    
     def __build_test(self):
         """
         return:

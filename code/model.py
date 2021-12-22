@@ -396,6 +396,49 @@ class LightGCN(BasicModel):
         g = g.coalesce().to(world.device)
         return g
 
+    def __dropadd_v4(self,x, lowUser,lowItem,trainSize, keep_prob):
+        onePrint("dropaddV4")
+        # LastFm Sparsity : 0.00620355984113386
+        # # 孤立点 加边
+        # keep_prob=min(keep_prob,trainSize)
+        addNum=int(trainSize*keep_prob/4)
+        # 除4是因为我只对平均值以下的节点进行添加
+        x=x.to("cpu")
+        size = x.size()
+        index = x.indices().t()
+        values = x.values()
+        
+        # random_index = torch.rand(m_user+m_item) + keep_prob / 2
+        # print(lowUser.shape)
+        randUserIdx = (torch.rand(addNum) * len(lowUser)).long()
+        randItemIdx = (torch.rand(addNum) * len(lowItem)).long()
+        # print(randUserIdx)
+        randUser=lowUser[randUserIdx]
+        randItem=lowItem[randItemIdx]
+        newIndex = torch.stack([randUser,randItem], dim=0)
+        newIndex = torch.LongTensor(newIndex)
+        oneLen=len(randItem)+len(values)
+        # print(newIndex.shape)
+        # print(index.t().shape)
+        newIndex = torch.cat((index.t(),newIndex), dim=1)
+        
+        newValues=torch.ones(oneLen).int()
+        # print(newValues.shape)
+        newG=torch.sparse.IntTensor(newIndex,newValues,size)
+        newG = newG.coalesce()
+        dense=newG.to_dense()
+        D=torch.sum(dense,dim=1).float()
+        D[D==0.]=1.
+        D_sqrt = torch.sqrt(D).unsqueeze(dim=0)
+        dense = dense/D_sqrt
+        dense = dense/D_sqrt.t()
+        index = dense.nonzero()
+        data  = dense[dense >= 1e-9]
+        assert len(index) == len(data)
+        g = torch.sparse.FloatTensor(index.t(), data, size)
+        g = g.coalesce().to(world.device)
+        return g
+
     def __dropadd_v000(self,x,keep_prob):
         # 孤立点 加边
         size = x.size()
@@ -486,7 +529,9 @@ class LightGCN(BasicModel):
         if self.config['dropout']:
             onePrint("dropout")
             if self.training:
-                g_droped = self.__dropadd_v3(self.Graph, self.num_users, self.num_items,self.dataset.trainDataSize, self.keep_prob)
+                # g_droped = self.__dropadd_v2(self.Graph, self.num_users, self.num_items, self.keep_prob)
+                # g_droped = self.__dropadd_v3(self.Graph, self.num_users, self.num_items,self.dataset.trainDataSize, self.keep_prob)
+                g_droped = self.__dropadd_v4(self.Graph, self.dataset.lowUser, self.dataset.lowItem,self.dataset.trainDataSize, self.keep_prob)
             else:
                 g_droped = self.Graph        
         else:
