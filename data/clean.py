@@ -1,11 +1,29 @@
 import sys,os
-fname = "data1.txt"
+# import numpy as np
+from collections import Counter
+fname = "./lastfm/data1.txt"
 tname = "test1.txt"
 m1=m2=0
 s1=set()
 s2=set()
 lis1=[]
 lis2=[]
+
+def countDegree(lis):
+    cou=Counter(lis)
+    cou=sorted(cou.items(),key=lambda x: x[0])
+    print(cou)
+    sum=0
+    tim=0
+    for i in cou:
+        sum+=i[1]
+        if i[1]<=12:
+            tim+=1 
+    print(tim)
+    # value = np.array(cou.values())
+    # sum=np.sum(value)
+    print(sum)
+    print(sum/cou[-1][0])
 with open(fname,"r") as fin:
     content=fin.readlines()
     for lin in content:
@@ -18,6 +36,10 @@ with open(fname,"r") as fin:
         lis2.append(int(tmp[1]))
         # print(tmp[0],end=",")
         # print(tmp[1])
+countDegree(lis1) # 12 113
+# countDegree(lis2) # 1 125
+exit(0)
+
 print(m1,m2)
 print(len(s1))
 print(len(s2))

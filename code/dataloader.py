@@ -71,9 +71,49 @@ class BasicDataset(Dataset):
         """
         raise NotImplementedError
 
+# from collections import Counter
+# import torch
+# import numpy as np
+# a = [1, 2, 3, 1, 1, 2]
+# a=np.array(a)
+# result = Counter(a)
+# print (result)
 
-def add_virtual(data,limit):
-    onePrint("addVirtual")
+    def add_virtual_V2(self,data, user,item,limitU,limitI):
+        # 
+        onePrint("addVirtualV2")
+        from collections import Counter  
+        # uniUser = np.unique(user)
+        # n=len(uniUser)
+        add_node=[]
+        coutUser=Counter(user)
+        coutUser=sorted(coutUser.items(),key=lambda x:x[1])
+        for (idx,sum) in coutUser:
+            if sum<=limitU:
+                add_node.append((idx,self.m_item)) # 开区间
+                self.m_item+=1
+            else :
+                break
+        print("add_Item",len(add_node))
+        coutItem=Counter(item)
+        coutItem=sorted(coutItem.items(),key=lambda x:x[1])
+        for (idx,sum) in coutItem:
+            if sum<=limitI:
+                add_node.append((self.n_user,idx)) # 开区间
+                self.n_user+=1
+            else :
+                break
+        
+        
+        add_node=np.array(add_node)
+        print("add_node=",len(add_node))
+        # print(data.shape)
+        # print(add_node.shape)
+        return np.concatenate((data,add_node),axis=0)
+
+def add_virtual_V1(data,limit):
+    # 有bug，会把user和第1，2，3，..个item相连,而且应该对item也做类似操作
+    onePrint("addVirtualV1")
     user=np.array(data[:,0])
     item=np.array(data[:,1])
     uniUser = np.unique(user)
@@ -114,11 +154,18 @@ class LastFM(BasicDataset):
         _trainData-= 1
         testData -= 1
         # print(_trainData.shape)
-        trainData = _trainData[:,0:2]
-        self.add_virtual_node = False 
+        trainData = _trainData[:,:2]
+        self.trainUser = np.array(trainData[:,0],dtype="int")
+        self.trainItem = np.array(trainData[:,1],dtype="int")
+        self.n_user = np.max(self.trainUser)
+        self.m_item = np.max(self.trainItem)
+        print(self.n_user)
+        print(self.m_item)
+        
+        self.add_virtual_node = True 
         if self.add_virtual_node:
             # print(trainData.shape)
-            trainData=add_virtual(trainData,5)
+            trainData=self.add_virtual_V2(trainData,self.trainUser,self.trainItem,12,1)
 
         self.trustNet  = trustNet
         self.trainData = trainData
@@ -157,11 +204,13 @@ class LastFM(BasicDataset):
 
     @property
     def n_users(self):
-        return 1892
+        # return 1892
+        return self.n_user
     
     @property
     def m_items(self):
-        return 4489
+        # return 4489
+        return self.m_item
     
     @property
     def trainDataSize(self):
