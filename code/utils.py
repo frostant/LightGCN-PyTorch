@@ -85,6 +85,8 @@ def UniformSample_original_python(dataset):
     sample_time2 = 0.
     for i, user in enumerate(users):
         start = time()
+        if user>=dataset.old_n_user:
+            continue 
         posForUser = allPos[user]
         if len(posForUser) == 0:
             continue
@@ -101,6 +103,10 @@ def UniformSample_original_python(dataset):
                 break
         # TODO: 这个可以改成set相减进行random, 但正样本很少,速度更慢??
         # negitem 是一个ID, 表示负样本
+        if positem >= dataset.old_m_item:
+            continue 
+        if negitem >= dataset.old_m_item:
+            continue 
         S.append([user, positem, negitem])
         # 正负样本以1:1进行训练
         end = time()
@@ -239,6 +245,7 @@ def RecallPrecision_ATk(test_data, r, k):
     recall = np.sum(right_pred/recall_n)
     precis = np.sum(right_pred)/precis_n
     return {'recall': recall, 'precision': precis}
+    # 召回是有len个是正确的，我预测正确几个； 准确是我预测了K个，几个准确
     # 是不是预测int正确个数如果前k个有几个就是几,反之0
     # 则 预测率就是 ans/k, 召回率就是ans/出现的正样本个数
 

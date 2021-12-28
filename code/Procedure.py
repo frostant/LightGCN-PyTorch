@@ -103,9 +103,13 @@ def Test(dataset, Recmodel, epoch, w=None, multicore=0):
         # auc_record = []
         # ratings = []
         total_batch = len(users) // u_batch_size + 1
+        # print("total batch",total_batch)
+        # 每个batch的数量
         for batch_users in utils.minibatch(users, batch_size=u_batch_size):
-            allPos = dataset.getUserPosItems(batch_users)
+            allPos = dataset.getOldUserPosItems(batch_users)
+            # 好像不是从这里调用的!!!!!!!
             groundTrue = [testDict[u] for u in batch_users]
+            # 真实样本
             batch_users_gpu = torch.Tensor(batch_users).long()
             batch_users_gpu = batch_users_gpu.to(world.device)
 
@@ -119,6 +123,7 @@ def Test(dataset, Recmodel, epoch, w=None, multicore=0):
             rating[exclude_index, exclude_items] = -(1<<10)
             _, rating_K = torch.topk(rating, k=max_K)
             rating = rating.cpu().numpy()
+            # rating 第i个user和每个item的评分， 如果是训练样本的pos就设为0 
             # aucs = [ 
             #         utils.AUC(rating[i],
             #                   dataset, 

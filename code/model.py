@@ -560,8 +560,9 @@ class LightGCN(BasicModel):
     def getUsersRating(self, users):
         # 得到该user(是个ID)和所有item的得分
         all_users, all_items = self.computer()
+        all_users = all_users[:self.dataset.old_n_user]
         users_emb = all_users[users.long()]
-        items_emb = all_items
+        items_emb = all_items[:self.dataset.old_m_item]
         rating = self.f(torch.matmul(users_emb, items_emb.t()))
         return rating
     

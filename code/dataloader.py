@@ -53,6 +53,10 @@ class BasicDataset(Dataset):
     
     def getUserPosItems(self, users):
         raise NotImplementedError
+
+    def getOldUserPosItems(self, users):
+        
+        raise NotImplementedError
     
     def getUserNegItems(self, users):
         """
@@ -83,6 +87,7 @@ class BasicDataset(Dataset):
         # 
         onePrint("addVirtualV2")
         from collections import Counter  
+        print(data.shape)
         # uniUser = np.unique(user)
         # n=len(uniUser)
         add_node=[]
@@ -104,6 +109,8 @@ class BasicDataset(Dataset):
             else :
                 break
         
+        # self.n_user = self.old_n_user
+        # self.m_item = self.old_m_item
         
         add_node=np.array(add_node)
         print("add_node=",len(add_node))
@@ -155,12 +162,18 @@ class LastFM(BasicDataset):
         testData -= 1
         # print(_trainData.shape)
         trainData = _trainData[:,:2]
+        trainData = trainData.astype("int")
         self.trainUser = np.array(trainData[:,0],dtype="int")
         self.trainItem = np.array(trainData[:,1],dtype="int")
         self.n_user = np.max(self.trainUser)
         self.m_item = np.max(self.trainItem)
+        self.n_user+=1
+        self.m_item+=1
         print(self.n_user)
         print(self.m_item)
+        self.old_n_user=self.n_user
+        self.old_m_item=self.m_item
+        self.Old_UserItemNet=csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)), shape=(self.old_n_user, self.old_m_item))
         
         self.add_virtual_node = True 
         if self.add_virtual_node:
@@ -189,7 +202,6 @@ class LastFM(BasicDataset):
         self.socialNet    = csr_matrix((np.ones(len(trustNet)), (trustNet[:,0], trustNet[:,1]) ), shape=(self.n_users,self.n_users))
         # (users,items), bipartite graph
         self.UserItemNet  = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem) ), shape=(self.n_users,self.m_items)) 
-        
         # pre-calculate
         self._allPos = self.getUserPosItems(list(range(self.n_users)))
         # matrix:有和这个user交互的item
@@ -312,6 +324,15 @@ class LastFM(BasicDataset):
         # return 二维， 表示第i个user和他交互的item的编号
         return posItems
     
+    def getOldUserPosItems(self, users):
+        posItems = []
+        # print(self.Old_UserItemNet.shape)
+        for user in users:
+            posItems.append(self.Old_UserItemNet[user].nonzero()[1])
+        # 使用scipy会得到(array([0, 0, 0], dtype=int32), array([0, 1, 2], dtype=int32))
+        # 所以取第1维
+        # return 二维， 表示第i个user和他交互的item的编号
+        return posItems
     def getUserNegItems(self, users):
         negItems = []
         for user in users:
@@ -375,6 +396,7 @@ class Loader(BasicDataset):
         self.trainUniqueUsers = np.array(trainUniqueUsers)
         self.trainUser = np.array(trainUser)
         self.trainItem = np.array(trainItem)
+        print("SHape",self.trainUser.shape)
 
         with open(test_file) as f:
             for l in f.readlines():
@@ -390,18 +412,29 @@ class Loader(BasicDataset):
                     self.testDataSize += len(items)
         self.m_item += 1
         self.n_user += 1
+        self.old_n_user=self.n_user
+        self.old_m_item=self.m_item
         self.testUniqueUsers = np.array(testUniqueUsers)
         self.testUser = np.array(testUser)
         self.testItem = np.array(testItem)
-        
+
+        self.add_virtual_node = True 
+        if self.add_virtual_node:
+            trainData = np.stack((self.trainUser,self.trainItem),axis=1)
+            # print(trainData.shape)
+            trainData=self.add_virtual_V2(trainData,self.trainUser,self.trainItem,12,1)
+            self.trainUser=trainData[:][0]
+            self.trainItem=trainData[:][1]
+            
         self.Graph = None
         print(f"{self.trainDataSize} interactions for training")
         print(f"{self.testDataSize} interactions for testing")
         print(f"{world.dataset} Sparsity : {(self.trainDataSize + self.testDataSize) / self.n_users / self.m_items}")
         self.trainSparsity=self.trainDataSize/self.n_users/self.m_items
         # (users,items), bipartite graph
-        self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
-                                      shape=(self.n_user, self.m_item))
+        self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)), shape=(self.n_user, self.m_item))
+        self.Old_UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)), shape=(self.old_n_user, self.old_m_item))
+        
         self.users_D = np.array(self.UserItemNet.sum(axis=1)).squeeze()
         self.users_D[self.users_D == 0.] = 1
         self.items_D = np.array(self.UserItemNet.sum(axis=0)).squeeze()
@@ -522,6 +555,11 @@ class Loader(BasicDataset):
             posItems.append(self.UserItemNet[user].nonzero()[1])
         return posItems
 
+    def getOldUserPosItems(self, users):
+        posItems = []
+        for user in users:
+            posItems.append(self.Old_UserItemNet[user].nonzero()[1])
+        return posItems
     # def getUserNegItems(self, users):
     #     negItems = []
     #     for user in users:
